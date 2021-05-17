@@ -4,7 +4,9 @@ if (!process.env.NODE_ENV) {
   });
 }
 
-const { TELEGRAM_BOT_TOKEN, BOT_NAME } = process.env;
+const { TELEGRAM_BOT_TOKEN, BOT_USERNAME, BOT_NAME } = process.env;
+
+const ADMINS = [471468236];
 
 // const needle = require("needle");
 const TelegramAPI = require("node-telegram-bot-api");
@@ -41,12 +43,13 @@ const {
   // getNoWatermarkUrl,
   getVideoByUrl,
 } = require("./handlers/tiktok");
+const needle = require("needle");
 // const handlers = require("./handlers")(bot);
 
 // bot.onText(handlers.tiktok.regex, handlers.tiktok.callback);
 
 const videoRegex =
-  /https?:\/\/www.tiktok.com\/@([\D\d]+)\/video\/(\d+)|https?:\/\/vm.tiktok.com\/[\D\d]+/;
+  /https?:\/\/www.tiktok.com\/@([\D\d]+)\/video\/(\d+)|https?:\/\/vm.tiktok.com\/([A-Z]+)/i;
 
 let ttDownloadWaitMsg;
 
@@ -54,17 +57,19 @@ const ttCallback = async (msg, match) => {
   const chatId = msg.chat.id;
   const redisChatKey = `{chats.paused}${chatId}`;
 
-  const [, username, videoId] = match;
+  const [, username, videoId, mobileId] = match;
   // return console.log(match);
 
-  const videoUrl = `https://www.tiktok.com/@${username}/video/${videoId}`;
+  const videoUrl =
+    "https://" +
+    (mobileId
+      ? `vm.tiktok.com/${mobileId}`
+      : `www.tiktok.com/@${username}/video/${videoId}`);
 
   // return console.log(await getVideo(videoUrl));
 
-  const VIDEO_DOWNLOAD_TIMEOUT = 180; // 3 мин
+  const VIDEO_DOWNLOAD_TIMEOUT = 60; // 1 мин
   const ONE_THOUSAND = 1e3; // Число 1000
-
-  console.time("ttDownload");
 
   const isDownloadAvailable = await (async () => {
     const reply = await redis.get(redisChatKey);
@@ -87,6 +92,7 @@ const ttCallback = async (msg, match) => {
     !isDownloadAvailable.ok && isDownloadAvailable.claimed.getTime();
 
   if (
+    !ADMINS.includes(chatId) &&
     !isDownloadAvailable.ok &&
     nowTimestamp < claimDelay + VIDEO_DOWNLOAD_TIMEOUT * ONE_THOUSAND
   ) {
@@ -104,6 +110,8 @@ const ttCallback = async (msg, match) => {
     );
   }
 
+  console.time("ttDownload");
+
   // return console.log(msg.chat);
   // console.log(videoUrl);
 
@@ -117,6 +125,7 @@ const ttCallback = async (msg, match) => {
 
   try {
     noWaterMarkUrl = await getVideoByUrl(videoUrl);
+    console.log(noWaterMarkUrl);
   } catch (err) {
     console.error(err.message);
   }
@@ -124,22 +133,38 @@ const ttCallback = async (msg, match) => {
   if (!noWaterMarkUrl) {
     // Если ссылка с сайта не пришла - подождать секунду и повторить снова
     // bot.deleteMessage(chatId, waitMsg.message_id);
-    return setTimeout(ttCallback.bind(null, msg, match), 500);
+    // return setTimeout(ttCallback.bind(null, msg, match), 500);
+    return bot.sendMessage(chatId, `Не удалось скачать указанный Вами ресурс`);
     // return ttCallback(msg, match);
   }
 
   // console.log(noWaterMarkUrl)
-  console.timeEnd("ttDownload");
+  // console.timeEnd("ttDownload");
 
   await redis.setex(redisChatKey, VIDEO_DOWNLOAD_TIMEOUT, new Date());
 
-  await bot.sendMediaGroup(chatId, [
-    {
-      type: "video",
-      media: noWaterMarkUrl,
-      caption: `${videoUrl}\n\nВидео скачано при поддержке ${BOT_NAME}`,
-    },
-  ]);
+  try {
+    await bot.sendMediaGroup(chatId, [
+      {
+        type: "video",
+        media: noWaterMarkUrl,
+        caption: `${videoUrl}\n\nВидео скачано при поддержке ${BOT_USERNAME}`,
+      },
+    ]);
+    // await bot.sendVideo(chatId, noWaterMarkUrl);
+  } catch (err) {
+    const noWaterMarkBuffer = await needle("get", noWaterMarkUrl);
+    // console.log(noWaterMarkBuffer.body);
+
+    console.error(
+      "Error while sending media: ",
+      err.message,
+      "Sending buffer instead"
+    );
+    await bot.sendVideo(chatId, noWaterMarkBuffer.body);
+  }
+
+  console.timeEnd("ttDownload");
 
   if (ttDownloadWaitMsg) {
     bot.deleteMessage(chatId, ttDownloadWaitMsg.message_id);
@@ -222,7 +247,7 @@ bot.on("callback_query", async msg => {
 bot.on("message", msg => {
   const { id: chatId, first_name, last_name } = msg.chat;
 
-  // console.log(chatId);
+  // console.log(msg);
 
   const match = msg.text.match(videoRegex);
 
@@ -248,10 +273,23 @@ bot.on("message", msg => {
         },
       }
     );
+  } else if (msg.text.match(/\/help/)) {
+    return bot.sendMessage(
+      chatId,
+      `Привет. Тебе нужна помощь?\n\nМеня зовут *${BOT_NAME}.*\n\nЯ умею скачивать видео из TikTok.
+      `,
+      {
+        parse_mode: "Markdown",
+      }
+    );
   }
 
   return bot.sendMessage(
     chatId,
     `Я не совсем тебя понял...\n\nМожет отправишь ссылку на видео?`
   );
+});
+
+bot.on("polling_error", err => {
+  console.error(err);
 });
