@@ -55,9 +55,9 @@ const getVideo = async url => {
 
   try {
     // const html = await page.$eval("body", root => root.innerHTML);
-    const { body } = await needle("post", baseUrl, `url=${url}`);
+    const { body, headers } = await needle("post", baseUrl, `url=${url}`);
 
-    // return response.body;
+    console.log(headers);
 
     const $ = cheerio.load(body);
 
