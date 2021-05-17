@@ -15,7 +15,7 @@ redis: if (REDISTOGO_URL) {
 
   console.log(hostname, port, password);
 
-  redis.auth(password);
+  client.auth(password);
 } else {
   client = redis.createClient();
 }
