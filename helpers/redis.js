@@ -1,7 +1,17 @@
 const redis = require("redis");
 const { promisify } = require("util");
+const { REDIS_URL } = process.env;
 
-const client = redis.createClient();
+client = redis.createClient(
+  REDIS_URL ? REDIS_URL : "",
+  REDIS_URL
+    ? {
+        tls: {
+          rejectUnauthorized: false,
+        },
+      }
+    : null
+);
 
 // const hget = promisify(client.hget).bind(client);
 // const hsetnx = promisify(client.hsetnx).bind(client);
