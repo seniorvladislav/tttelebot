@@ -9,7 +9,7 @@ const { TELEGRAM_BOT_TOKEN, BOT_NAME } = process.env;
 // const needle = require("needle");
 const TelegramAPI = require("node-telegram-bot-api");
 // const TikTokScraper = require("tiktok-scraper");
-const ytdl = require("ytdl-core");
+// const ytdl = require("ytdl-core");
 // const fs = require("fs")
 const redis = require("./helpers/redis");
 
