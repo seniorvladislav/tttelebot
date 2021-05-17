@@ -1,17 +1,24 @@
 const redis = require("redis");
 const { promisify } = require("util");
-const { REDIS_URL } = process.env;
 
-client = redis.createClient(
-  REDIS_URL ? REDIS_URL : "",
-  REDIS_URL
-    ? {
-        tls: {
-          rejectUnauthorized: false,
-        },
-      }
-    : null
-);
+let client;
+const { REDISTOGO_URL } = process.env;
+
+//redistogo:50eeed567ac4f129da7d7f32ea9f64a0@soapfish.redistogo.com:11358/
+
+redis: if (REDISTOGO_URL) {
+  const [hostname, port] = REDISTOGO_URL.split("@")[1]
+    .replace("/", "")
+    .split(":");
+  client = redis.createClient(port, hostname);
+  const [, password] = REDISTOGO_URL.match(/redis:\/\/redistogo:([\d\D]+)@/);
+
+  console.log(hostname, port, password);
+
+  redis.auth(password);
+} else {
+  client = redis.createClient();
+}
 
 // const hget = promisify(client.hget).bind(client);
 // const hsetnx = promisify(client.hsetnx).bind(client);
