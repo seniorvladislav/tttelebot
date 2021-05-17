@@ -67,7 +67,7 @@ const getVideo = async url => {
 
     return links.pop();
   } catch (err) {
-    console.error(err);
+    console.log(response.headers, response.body);
   }
 };
 

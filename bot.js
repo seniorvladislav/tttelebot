@@ -125,7 +125,6 @@ const ttCallback = async (msg, match) => {
 
   try {
     noWaterMarkUrl = await getVideoByUrl(videoUrl);
-    console.log(noWaterMarkUrl);
   } catch (err) {
     console.error(err.message);
   }
@@ -144,6 +143,8 @@ const ttCallback = async (msg, match) => {
   await redis.setex(redisChatKey, VIDEO_DOWNLOAD_TIMEOUT, new Date());
 
   try {
+    console.log(noWaterMarkUrl);
+
     await bot.sendMediaGroup(chatId, [
       {
         type: "video",
