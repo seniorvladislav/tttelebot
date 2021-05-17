@@ -11,12 +11,13 @@ const TelegramAPI = require("node-telegram-bot-api");
 // const TikTokScraper = require("tiktok-scraper");
 const ytdl = require("ytdl-core");
 // const fs = require("fs")
+const redis = require("./helpers/redis");
 
-const db = {
-  downloaders: {
-    471468236: new Date(),
-  },
-};
+// const db = {
+//   downloaders: {
+//     // 471468236: new Date(),
+//   },
+// };
 
 const bot = new TelegramAPI(TELEGRAM_BOT_TOKEN, {
   polling: true,
@@ -37,37 +38,65 @@ bot.onText(/\/say (.+)/, (msg, match) => {
 });
 
 const {
-  getNoWatermarkUrl,
-  // mainGetNoWatermarkUrl,
+  // getNoWatermarkUrl,
+  getVideoByUrl,
 } = require("./handlers/tiktok");
 // const handlers = require("./handlers")(bot);
 
 // bot.onText(handlers.tiktok.regex, handlers.tiktok.callback);
 
 const videoRegex =
-  /(https?:\/\/www.tiktok.com\/@[\D\d]+\/video\/\d+)|(https?:\/\/vm.tiktok.com\/[\D\d]+)/;
+  /https?:\/\/www.tiktok.com\/@([\D\d]+)\/video\/(\d+)|https?:\/\/vm.tiktok.com\/[\D\d]+/;
 
 let ttDownloadWaitMsg;
 
 const ttCallback = async (msg, match) => {
   const chatId = msg.chat.id;
+  const redisChatKey = `{chats.paused}${chatId}`;
 
-  const [videoUrl] = match;
+  const [, username, videoId] = match;
+  // return console.log(match);
 
-  const VIDEO_DOWNLOAD_TIMEOUT = 60e3;
+  const videoUrl = `https://www.tiktok.com/@${username}/video/${videoId}`;
+
+  // return console.log(await getVideo(videoUrl));
+
+  const VIDEO_DOWNLOAD_TIMEOUT = 180; // 3 мин
+  const ONE_THOUSAND = 1e3; // Число 1000
+
+  console.time("ttDownload");
+
+  const isDownloadAvailable = await (async () => {
+    const reply = await redis.get(redisChatKey);
+
+    if (reply) {
+      return {
+        ok: false,
+        claimed: new Date(reply),
+      };
+    } else {
+      return {
+        ok: true,
+        claimed: null,
+      };
+    }
+  })();
+
+  const nowTimestamp = new Date().getTime();
+  const claimDelay =
+    !isDownloadAvailable.ok && isDownloadAvailable.claimed.getTime();
 
   if (
-    db.downloaders[chatId] &&
-    db.downloaders[chatId].getTime() + VIDEO_DOWNLOAD_TIMEOUT >
-      new Date().getTime()
+    !isDownloadAvailable.ok &&
+    nowTimestamp < claimDelay + VIDEO_DOWNLOAD_TIMEOUT * ONE_THOUSAND
   ) {
     return bot.sendMessage(
       chatId,
-      `Подождите <b>${Math.round(
-        (db.downloaders[chatId].getTime() +
-          VIDEO_DOWNLOAD_TIMEOUT -
-          new Date().getTime()) /
-          1e3
+      `Подождите <b>${parseFloat(
+        (claimDelay + VIDEO_DOWNLOAD_TIMEOUT * ONE_THOUSAND - nowTimestamp) /
+          ONE_THOUSAND
+      ).toFixed(
+        1
       )}</b> сек. — и сможете <b><em>дальше скачивать видео!</em></b>`,
       {
         parse_mode: "HTML",
@@ -80,8 +109,6 @@ const ttCallback = async (msg, match) => {
 
   // return await mainGetNoWatermarkUrl();
 
-  console.time("ttDownload");
-
   if (!ttDownloadWaitMsg) {
     ttDownloadWaitMsg = await bot.sendMessage(chatId, `Видео загружается...`);
   }
@@ -89,9 +116,9 @@ const ttCallback = async (msg, match) => {
   let noWaterMarkUrl;
 
   try {
-    noWaterMarkUrl = await getNoWatermarkUrl(videoUrl);
+    noWaterMarkUrl = await getVideoByUrl(videoUrl);
   } catch (err) {
-    console.log(err);
+    console.error(err.message);
   }
 
   if (!noWaterMarkUrl) {
@@ -104,11 +131,7 @@ const ttCallback = async (msg, match) => {
   // console.log(noWaterMarkUrl)
   console.timeEnd("ttDownload");
 
-  db.downloaders[chatId] = new Date();
-
-  setTimeout(() => {
-    delete db.downloaders[chatId];
-  }, VIDEO_DOWNLOAD_TIMEOUT);
+  await redis.setex(redisChatKey, VIDEO_DOWNLOAD_TIMEOUT, new Date());
 
   await bot.sendMediaGroup(chatId, [
     {

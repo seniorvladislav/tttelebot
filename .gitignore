@@ -2,3 +2,4 @@
 nodemon.json
 .prettierrc
 /config
+handlers/index.js

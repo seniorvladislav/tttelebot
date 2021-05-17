@@ -1,26 +1,74 @@
-const fetch = require("node-fetch");
-// const needle = require("needle");
+// const fetch = require("node-fetch");
+const needle = require("needle");
+const cheerio = require("cheerio");
 // const puppeteer = require("puppeteer");
 
 // const mainEndpoint = "https://ssstik.io/";
 
-const altEndpoint =
-  "https://freevideosdowloader.tk/services/downloader_api.php";
+// const altEndpoint =
+//   "https://freevideosdowloader.tk/services/downloader_api.php";
 
-const getNoWatermarkUrl = async url => {
-  const response = await fetch(altEndpoint, {
-    method: "POST",
-    body: `url=${url}`,
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-  });
+// const getNoWatermarkUrl = async url => {
+//   try {
+//     const response = await fetch(altEndpoint, {
+//       method: "POST",
+//       body: `url=${url}`,
+//       headers: {
+//         "Content-Type": "application/x-www-form-urlencoded",
+//       },
+//     });
 
-  const data = await response.json();
+//     const data = await response.json();
 
-  const { VideoUrl } = data.VideoResult[0];
+//     const { VideoUrl } = data.VideoResult[0];
 
-  return VideoUrl;
+//     return VideoUrl;
+//   } catch (err) {
+//     return err;
+//   }
+// };
+
+// const getVideo = async url => {
+//   try {
+//     const endpoint = `https://ttdownloader.com/?url=https://www.tiktok.com/@american_times/video/6944351015525174533?is_copy_url=1&is_from_webapp=v1`;
+//     const { body } = await needle("get", endpoint);
+
+//     console.log(body);
+
+//     const $ = await cheerio.load(body);
+
+//     const noWaterMarkUrl = $("#results-container");
+
+//     return noWaterMarkUrl.html();
+//   } catch (err) {
+//     return err;
+//   }
+// };
+
+const getVideo = async url => {
+  const baseUrl = "https://snaptik.app/action.php";
+
+  // const browser = await puppeteer.launch();
+  // const page = await browser.newPage();
+
+  // await page.goto(baseUrl);
+
+  try {
+    // const html = await page.$eval("body", root => root.innerHTML);
+    const { body } = await needle("post", baseUrl, `url=${url}`);
+
+    // return response.body;
+
+    const $ = cheerio.load(body);
+
+    let links = $('a[title^="Download Server"]');
+
+    links = [...links.slice(4)].map(l => $(l).attr("href"));
+
+    return links.pop();
+  } catch (err) {
+    console.error(err);
+  }
 };
 
 // const mainGetNoWatermarkUrl = async url => {
@@ -52,6 +100,7 @@ const getNoWatermarkUrl = async url => {
 // };
 
 module.exports = {
-  getNoWatermarkUrl,
+  // getNoWatermarkUrl,
+  getVideoByUrl: getVideo,
   // mainGetNoWatermarkUrl,
 };
