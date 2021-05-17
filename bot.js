@@ -168,41 +168,41 @@ const ttCallback = async (msg, match) => {
 
 // bot.onText(videoRegex, ttCallback);
 
-bot.onText(
-  /https?:\/\/www.youtube.com\/watch\?v=[a-zA-Z-0-9_]+/gi,
-  async (msg, match) => {
-    const chatId = msg.chat.id;
-    const videoUrl = match[0];
+// bot.onText(
+//   /https?:\/\/www.youtube.com\/watch\?v=[a-zA-Z-0-9_]+/gi,
+//   async (msg, match) => {
+//     const chatId = msg.chat.id;
+//     const videoUrl = match[0];
 
-    // return console.log(videoUrl)
+//     // return console.log(videoUrl)
 
-    const waitMessage = await bot.sendMessage(
-      chatId,
-      "Пожалуйста, подождите..."
-    );
+//     const waitMessage = await bot.sendMessage(
+//       chatId,
+//       "Пожалуйста, подождите..."
+//     );
 
-    const info = await ytdl.getInfo(videoUrl);
-    const format = ytdl.chooseFormat(info.formats, {
-      quality: ["137", "136", "135"],
-      filter: format => format.container === "mp4",
-    });
+//     const info = await ytdl.getInfo(videoUrl);
+//     const format = ytdl.chooseFormat(info.formats, {
+//       quality: ["137", "136", "135"],
+//       filter: format => format.container === "mp4",
+//     });
 
-    // return console.log(format)
+//     // return console.log(format)
 
-    const readableStream = await ytdl.downloadFromInfo(info, { format });
+//     const readableStream = await ytdl.downloadFromInfo(info, { format });
 
-    const videoBuffer = await new fetch.Response(readableStream).buffer();
+//     const videoBuffer = await new fetch.Response(readableStream).buffer();
 
-    // return console.log(videoBuffer)
+//     // return console.log(videoBuffer)
 
-    try {
-      bot.sendVideo(chatId, videoBuffer);
-      bot.deleteMessage(chatId, waitMessage.message_id);
-    } catch (err) {
-      console.error(err.message);
-    }
-  }
-);
+//     try {
+//       bot.sendVideo(chatId, videoBuffer);
+//       bot.deleteMessage(chatId, waitMessage.message_id);
+//     } catch (err) {
+//       console.error(err.message);
+//     }
+//   }
+// );
 
 bot.on("callback_query", async msg => {
   const chatId = msg.message.chat.id;
