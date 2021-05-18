@@ -66,7 +66,7 @@ const ttCallback = async (msg, match) => {
       ? `vm.tiktok.com/${mobileId}`
       : `www.tiktok.com/@${username}/video/${videoId}`);
 
-  // return console.log(await getVideo(videoUrl));
+  // return console.log(await getVideoByUrl(videoUrl));
 
   const VIDEO_DOWNLOAD_TIMEOUT = 60; // 1 мин
   const ONE_THOUSAND = 1e3; // Число 1000
@@ -292,5 +292,5 @@ bot.on("message", msg => {
 });
 
 bot.on("polling_error", err => {
-  console.error(err);
+  console.error(err.code, err.response);
 });

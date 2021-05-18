@@ -11,9 +11,11 @@
   "license": "ISC",
   "dependencies": {
     "cheerio": "^1.0.0-rc.9",
+    "https-proxy-agent": "^5.0.0",
     "needle": "^2.6.0",
     "node-telegram-bot-api": "^0.53.0",
-    "redis": "^3.1.2"
+    "redis": "^3.1.2",
+    "request": "^2.88.2"
   },
   "devDependencies": {
     "dotenv": "^9.0.2",

@@ -1,7 +1,11 @@
 // const fetch = require("node-fetch");
 const needle = require("needle");
 const cheerio = require("cheerio");
-// const puppeteer = require("puppeteer");
+const request = require("request");
+const HttpsProxyAgent = require("https-proxy-agent");
+const { promisify } = require("util");
+
+const post = promisify(request.post).bind(request);
 
 // const mainEndpoint = "https://ssstik.io/";
 
@@ -46,7 +50,7 @@ const cheerio = require("cheerio");
 // };
 
 const getVideo = async url => {
-  const baseUrl = "https://snaptik.app/action.php";
+  const endpoint = "https://snaptik.app/action.php";
 
   // const browser = await puppeteer.launch();
   // const page = await browser.newPage();
@@ -55,19 +59,35 @@ const getVideo = async url => {
 
   try {
     // const html = await page.$eval("body", root => root.innerHTML);
-    const { body, headers } = await needle("post", baseUrl, `url=${url}`);
+    const { QUOTAGUARDSHIELD_URL: proxy } = process.env;
+    const options = {
+      uri: new URL(endpoint),
+      agent: proxy ? new HttpsProxyAgent(proxy) : null,
+      form: {
+        url,
+      },
+    };
 
-    console.log(body);
+    const { body, statusCode } = await post(options);
 
-    const $ = cheerio.load(body);
+    // return console.log(resp.statusCode);
 
-    let links = $('a[title^="Download Server"]');
+    if (statusCode === 200) {
+      // return console.log(resp.body);
 
-    links = [...links.slice(4)].map(l => $(l).attr("href"));
+      const $ = cheerio.load(body);
 
-    return links.pop();
+      let links = $('a[title^="Download Server"]');
+
+      links = [...links.slice(4)].map(l => $(l).attr("href"));
+
+      // console.log(links.pop());
+
+      return Promise.resolve(links.pop());
+    }
   } catch (err) {
-    console.log(response.headers, response.body);
+    console.log(err);
+    // console.log(response.headers, response.body);
   }
 };
 
