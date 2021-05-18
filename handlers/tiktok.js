@@ -59,14 +59,33 @@ const getVideo = async url => {
 
   try {
     // const html = await page.$eval("body", root => root.innerHTML);
-    const { QUOTAGUARDSHIELD_URL: proxy } = process.env;
-    const options = {
-      uri: new URL(endpoint),
-      agent: proxy ? new HttpsProxyAgent(proxy) : null,
-      form: {
-        url,
-      },
-    };
+    const proxy = new URL(process.env.QUOTAGUARD_URL);
+    const target = new URL(endpoint);
+
+    const options = process.env.NODE_ENV
+      ? {
+          hostname: proxy.hostname,
+          port: proxy.port || 80,
+          uri: target.href,
+          headers: {
+            "Proxy-Authorization":
+              "Basic " +
+              Buffer.from(`${proxy.username}:${proxy.password}`).toString(
+                "base64"
+              ),
+            Host: target.hostname,
+          },
+          // agent: proxy ? new HttpsProxyAgent(proxy) : null,
+          form: {
+            url,
+          },
+        }
+      : {
+          uri: target.href,
+          form: {
+            url,
+          },
+        };
 
     const { body, statusCode } = await post(options);
 
