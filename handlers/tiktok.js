@@ -50,7 +50,7 @@ const post = promisify(request.post).bind(request);
 // };
 
 const getVideo = async url => {
-  const endpoint = "https://snaptik.app/action.php";
+  const endpoint = "https://snaptik.app/action.php?lang=en";
 
   // const browser = await puppeteer.launch();
   // const page = await browser.newPage();
@@ -70,7 +70,9 @@ const getVideo = async url => {
 
     const { body, statusCode } = await post(options);
 
-    return console.log(statusCode, body);
+    if (process.env.NODE_ENV) {
+      console.log(statusCode, body);
+    }
 
     if (statusCode === 200) {
       // return console.log(resp.body);
