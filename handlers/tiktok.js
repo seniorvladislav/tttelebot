@@ -50,7 +50,7 @@ const post = promisify(request.post).bind(request);
 // };
 
 const getVideo = async url => {
-  const endpoint = "https://snaptik.app/action.php?lang=en";
+  const endpoint = "https://snaptik.app/action.php";
 
   // const browser = await puppeteer.launch();
   // const page = await browser.newPage();
@@ -59,33 +59,17 @@ const getVideo = async url => {
 
   try {
     // const html = await page.$eval("body", root => root.innerHTML);
-    const proxy = new URL(process.env.QUOTAGUARD_URL);
-    const target = new URL(endpoint);
-
-    const options = process.env.NODE_ENV
-      ? {
-          hostname: proxy.hostname,
-          port: proxy.port || 80,
-          uri: target.href,
-          headers: {
-            "Proxy-Authorization":
-              "Basic " +
-              Buffer.from(`${proxy.username}:${proxy.password}`).toString(
-                "base64"
-              ),
-            Host: target.hostname,
-          },
-          // agent: proxy ? new HttpsProxyAgent(proxy) : null,
-          form: {
-            url,
-          },
-        }
-      : {
-          uri: target.href,
-          form: {
-            url,
-          },
-        };
+    const options = {
+      proxy: process.env.NODE_ENV ? process.env.QUOTAGUARD_URL : null,
+      url: endpoint,
+      headers: {
+        "User-Agent": "node.js",
+      },
+      // agent: proxy ? new HttpsProxyAgent(proxy) : null,
+      form: {
+        url,
+      },
+    };
 
     const { body, statusCode } = await post(options);
 
