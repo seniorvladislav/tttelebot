@@ -70,7 +70,7 @@ const getVideo = async url => {
 
     const { body, statusCode } = await post(options);
 
-    // return console.log(resp.statusCode);
+    return console.log(resp.statusCode, resp.body);
 
     if (statusCode === 200) {
       // return console.log(resp.body);
