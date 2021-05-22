@@ -10,10 +10,17 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@juliendu11/instagram-downloader": "^0.2.0",
     "cheerio": "^1.0.0-rc.9",
     "https-proxy-agent": "^5.0.0",
+    "instagram-downloader": "^0.0.0",
+    "instagram-stories": "^1.1.2",
+    "instagram-web-api": "^2.2.2",
     "needle": "^2.6.0",
+    "node-downloader-helper": "^1.0.18",
     "node-telegram-bot-api": "^0.53.0",
+    "nodejs-file-downloader": "^4.5.3",
+    "puppeteer": "^9.1.1",
     "redis": "^3.1.2",
     "request": "^2.88.2"
   },
