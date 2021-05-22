@@ -6,7 +6,7 @@ if (!process.env.NODE_ENV) {
 
 const { TELEGRAM_BOT_TOKEN, BOT_USERNAME, BOT_NAME } = process.env;
 
-const ADMINS = [471468236];
+const ADMINS = [хуйня];
 
 // const needle = require("needle");
 const TelegramAPI = require("node-telegram-bot-api");
