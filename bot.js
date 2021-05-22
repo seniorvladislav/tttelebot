@@ -10,10 +10,26 @@ const ADMINS = [471468236];
 
 // const needle = require("needle");
 const TelegramAPI = require("node-telegram-bot-api");
+const puppeteer = require("puppeteer");
+const fs = require("fs");
+const path = require("path");
+const { Readable } = require("stream");
+const { promisify } = require("util");
+const instagram_download = require("@juliendu11/instagram-downloader");
+const Instagram = require("instagram-downloader");
+const {
+  getStories,
+  getStoriesFeed,
+  getMediaByCode,
+  getUserByUsername,
+} = require("instagram-stories");
+const Downloader = require("nodejs-file-downloader");
 // const TikTokScraper = require("tiktok-scraper");
 // const ytdl = require("ytdl-core");
 // const fs = require("fs")
 const redis = require("./helpers/redis");
+
+const readDirectory = promisify(fs.readdir);
 
 // const db = {
 //   downloaders: {
@@ -44,12 +60,17 @@ const {
   getVideoByUrl,
 } = require("./handlers/tiktok");
 const needle = require("needle");
+const cheerio = require("cheerio");
 // const handlers = require("./handlers")(bot);
 
 // bot.onText(handlers.tiktok.regex, handlers.tiktok.callback);
 
 const videoRegex =
   /https?:\/\/www.tiktok.com\/@([\D\d]+)\/video\/(\d+)|https?:\/\/vm.tiktok.com\/([A-Z]+)/i;
+
+// const instaRegex = /instagram.com\/p\/([A-Z0-9]+)/i;
+const instaRegex =
+  /(instagram.com\/p\/[\D\d]+)|(instagram.com\/stories\/[\D\d.]+\/[\d\/]+)/i;
 
 let ttDownloadWaitMsg;
 
@@ -110,7 +131,8 @@ const ttCallback = async (msg, match) => {
     );
   }
 
-  console.time("ttDownload");
+  // console.time("ttDownload");
+  const start = new Date();
 
   // return console.log(msg.chat);
   // console.log(videoUrl);
@@ -142,14 +164,20 @@ const ttCallback = async (msg, match) => {
 
   await redis.setex(redisChatKey, VIDEO_DOWNLOAD_TIMEOUT, new Date());
 
+  // console.timeEnd("ttDownload");
+  const end = new Date();
+
   try {
-    console.log(noWaterMarkUrl);
+    // console.log(noWaterMarkUrl);
 
     await bot.sendMediaGroup(chatId, [
       {
         type: "video",
         media: noWaterMarkUrl,
-        caption: `${videoUrl}\n\nВидео скачано при поддержке ${BOT_USERNAME}`,
+        caption: `${videoUrl}\n\nВидео скачано за ${(
+          (end.getTime() - start.getTime()) /
+          ONE_THOUSAND
+        ).toLocaleString("ru")} сек.`,
       },
     ]);
     // await bot.sendVideo(chatId, noWaterMarkUrl);
@@ -164,8 +192,6 @@ const ttCallback = async (msg, match) => {
     );
     await bot.sendVideo(chatId, noWaterMarkBuffer.body);
   }
-
-  console.timeEnd("ttDownload");
 
   if (ttDownloadWaitMsg) {
     bot.deleteMessage(chatId, ttDownloadWaitMsg.message_id);
@@ -190,6 +216,183 @@ const ttCallback = async (msg, match) => {
   // }
 
   // bot.sendMessage(chatId, phrase)
+};
+
+const instaCallback = async (msg, match) => {
+  const chatId = msg.chat.id;
+  let instaUrl = match[2] || match[1];
+
+  instaUrl = `https://www.${instaUrl}`;
+  console.log(instaUrl);
+
+  try {
+    // const reply = await instagram_download.downloadMedia(
+    //   instaUrl,
+    //   __dirname + "/photos"
+    // );
+    // return console.log(reply);
+
+    const data = await Instagram(instaUrl);
+    // console.log(data);
+    const userId =
+      data.entry_data.StoriesPage && data.entry_data.StoriesPage[0].user.id;
+
+    let results = [];
+
+    if (userId) {
+      const stories = await getStories({
+        id: userId,
+        userid: 1284161654,
+        sessionid: "1509886866%3AcYWwo6HEDPifg4%3A12",
+      });
+
+      // const mediaCodes = stories.items.map(item => item.code);
+      // console.log(
+      //   stories.items
+      //     .filter(s => s.video_versions)
+      //     .map(v => v.video_versions[0].url)
+      // );
+
+      stories.items.forEach(s => {
+        if (s.video_versions) {
+          results.push({
+            url: s.video_versions[0].url,
+            type: "video",
+          });
+        } else if (s.image_versions2) {
+          const storyPhoto = s.image_versions2.candidates[0];
+          // console.log(storyPhoto.url);
+          results.push({
+            url: storyPhoto.url,
+            type: "photo",
+          });
+        }
+      });
+
+      // const media = await getMediaByCode({
+      //   code: mediaCodes[0],
+      //   userid: 1284161654,
+      //   sessionid: "1509886866%3AcYWwo6HEDPifg4%3A12",
+      // });
+
+      // console.log(media);
+    } else {
+      const { shortcode_media } = data.entry_data.PostPage[0].graphql;
+
+      results = shortcode_media.edge_sidecar_to_children
+        ? shortcode_media.edge_sidecar_to_children.edges.map(edge => {
+            let type = edge.node.__typename.replace("Graph", "").toLowerCase();
+
+            if (type === "image") {
+              type = "photo";
+            }
+
+            return {
+              url: edge.node.video_url || edge.node.display_url,
+              type,
+            };
+          })
+        : [
+            {
+              url:
+                shortcode_media.video_url ||
+                shortcode_media.display_resources.pop().src,
+              type: shortcode_media.__typename.endsWith("Image")
+                ? "photo"
+                : shortcode_media.__typename.replace("Graph", "").toLowerCase(),
+            },
+          ];
+    }
+
+    // return console.log(results);
+    // return;
+
+    const [, mediaID] = instaUrl.match(/\/p\/([\d\D]+)/);
+
+    console.log(mediaID);
+
+    const pathToSave = path.join(
+      __dirname,
+      "temp_videos",
+      `${userId || mediaID}`
+    );
+
+    const videoResults = results.filter(res => res.type === "video");
+
+    let files;
+
+    results.forEach(async r => {
+      if (r.type === "video") {
+        const downloader = new Downloader({
+          url: r.url,
+          directory: pathToSave,
+          cloneFiles: false,
+          maxAttempts: 3,
+        });
+
+        try {
+          await downloader.download();
+        } catch (err) {
+          console.error("Download failed", err);
+        }
+      }
+    });
+
+    if (videoResults.length) {
+      files = await readDirectory(pathToSave);
+    }
+
+    // return console.log(path.resolve(pathToSave, files[0]));
+
+    const media = results.map((r, index) => {
+      if (r.type === "video") {
+        return { type: r.type, media: path.resolve(pathToSave, files[index]) };
+      } else {
+        // console.log(r);
+        return { type: r.type, media: r.url };
+      }
+    });
+
+    // return console.log(media);
+
+    bot.sendMediaGroup(chatId, media);
+
+    // results.forEach(async r => {
+    //   try {
+    //     if (r.type === "video") {
+    //       const { body } = await needle("get", r.url);
+    //       // console.log(response.body);
+    //       bot.sendVideo(chatId, body);
+    //     } else if (r.type === "image") {
+    //       bot.sendPhoto(chatId, r.url);
+    //     }
+    //   } catch (err) {
+    //     console.error(err);
+    //   }
+    // });
+
+    // await bot.sendMediaGroup(chatId, {
+    //   type: "photo",
+    //   media: results,
+    //   caption: `${instaUrl}\n\nПост скачан!`,
+    // });
+
+    // await deleteFile(reply.file);
+    // const browser = await puppeteer.launch();
+    // const page = await browser.newPage();
+    // await page.goto(instaUrl);
+
+    // const imageSource = await page.$eval("body", el => el.innerHTML);
+
+    // console.log(imageSource);
+
+    // await browser.close();
+    // const { body, statusMessage } = await needle("get", instaUrl);
+    // console.log(body);
+  } catch (err) {
+    console.error(err);
+    bot.sendMessage(chatId, `Не удалось скачать фотогорафию по ссылке`);
+  }
 };
 
 // bot.onText(videoRegex, ttCallback);
@@ -250,11 +453,14 @@ bot.on("message", msg => {
 
   // console.log(msg);
 
-  const match = msg.text.match(videoRegex);
+  const ttMatch = msg.text.match(videoRegex);
+  const instaMatch = msg.text.match(instaRegex);
 
   // console.log(match);
-  if (match) {
-    return ttCallback(msg, match);
+  if (ttMatch) {
+    return ttCallback(msg, ttMatch);
+  } else if (instaMatch) {
+    return instaCallback(msg, instaMatch);
   }
 
   if (msg.text.match(/\/start/)) {
