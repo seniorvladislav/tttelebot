@@ -319,7 +319,10 @@ const instaCallback = async (msg, match) => {
 
       try {
         await downloader.download();
-        return fs.createReadStream(path.resolve(pathToSave, filename));
+        return {
+          filename,
+          stream: fs.createReadStream(path.resolve(pathToSave, filename)),
+        };
         // return await readDirectory(pathToSave);
       } catch (err) {
         // console.log(err);
@@ -383,13 +386,15 @@ const instaCallback = async (msg, match) => {
 
     const videoResults = results.filter(res => res.type === "video");
 
+    // console.log(videoResults);
+
     // files = await downloadVideoFiles(videoResults);
 
     files = await Promise.all(videoResults.map(r => downloadVideoFiles(r)));
     // return console.log(files);
 
     if (files.some(f => !f || Number.isInteger(f))) {
-      return;
+      // return;
     }
 
     // console.log(mediaID);
@@ -407,11 +412,22 @@ const instaCallback = async (msg, match) => {
     function sendResponse(files) {
       // return console.log(whereShouldSave());
 
+      // const videos = files.map(stream => ({ type: "video", media: stream }));
+
+      // let photos = results.filter(r => r.type === "photo");
+
+      // photos = photos.map(p => ({
+      //   type: "photo",
+      //   media: p.url,
+      // }));
+
+      // const media = [...photos, ...videos];
+
       const media = results.map((r, index) => {
-        if (r.type === "video" && files) {
+        if (r.type === "video") {
           return {
             type: r.type,
-            media: files[index],
+            media: files.find(f => r.url.includes(f.filename)).stream,
           };
         } else {
           // console.log(r);
@@ -473,6 +489,7 @@ const instaCallback = async (msg, match) => {
     // const { body, statusMessage } = await needle("get", instaUrl);
     // console.log(body);
   } catch (err) {
+    // console.error(err);
     if (!err.statusCode && err.statusCode !== 404) {
       console.error(err);
     }
