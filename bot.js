@@ -4,25 +4,31 @@ if (!process.env.NODE_ENV) {
   });
 }
 
-const { TELEGRAM_BOT_TOKEN, BOT_USERNAME, BOT_NAME } = process.env;
+const {
+  TELEGRAM_BOT_TOKEN,
+  BOT_USERNAME,
+  BOT_NAME,
+  INSTA_USERNAME,
+  INSTA_PASSWORD,
+  ME_USER_ID,
+} = process.env;
 
-const ADMINS = [хуйня];
+const ADMINS = [471468236];
 
 // const needle = require("needle");
 const TelegramAPI = require("node-telegram-bot-api");
-const puppeteer = require("puppeteer");
 const fs = require("fs");
 const path = require("path");
-const { Readable } = require("stream");
 const { promisify } = require("util");
-const instagram_download = require("@juliendu11/instagram-downloader");
-const Instagram = require("instagram-downloader");
-const {
-  getStories,
-  getStoriesFeed,
-  getMediaByCode,
-  getUserByUsername,
-} = require("instagram-stories");
+const InstagramWeb = require("instagram-web-api");
+const FileCookieStore = require("tough-cookie-filestore2");
+const cookieStore = new FileCookieStore("./cookies.json");
+const Instagram = new InstagramWeb({
+  username: INSTA_USERNAME,
+  password: INSTA_PASSWORD,
+  cookieStore,
+});
+const { getStories } = require("instagram-stories");
 const Downloader = require("nodejs-file-downloader");
 // const TikTokScraper = require("tiktok-scraper");
 // const ytdl = require("ytdl-core");
@@ -39,6 +45,7 @@ const readDirectory = promisify(fs.readdir);
 
 const bot = new TelegramAPI(TELEGRAM_BOT_TOKEN, {
   polling: true,
+  filepath: false,
 });
 
 bot.setMyCommands([
@@ -61,6 +68,7 @@ const {
 } = require("./handlers/tiktok");
 const needle = require("needle");
 const cheerio = require("cheerio");
+const { client } = require("./helpers/redis");
 // const handlers = require("./handlers")(bot);
 
 // bot.onText(handlers.tiktok.regex, handlers.tiktok.callback);
@@ -70,7 +78,7 @@ const videoRegex =
 
 // const instaRegex = /instagram.com\/p\/([A-Z0-9]+)/i;
 const instaRegex =
-  /(instagram.com\/p\/[\D\d]+)|(instagram.com\/stories\/[\D\d.]+\/[\d\/]+)/i;
+  /(instagram.com\/p\/[a-z0-9_]+)|(instagram.com\/stories\/[\D\d.]+\/[\d\/]+)|(instagram.com\/tv\/[a-z0-9_]+)/i;
 
 let ttDownloadWaitMsg;
 
@@ -220,142 +228,217 @@ const ttCallback = async (msg, match) => {
 
 const instaCallback = async (msg, match) => {
   const chatId = msg.chat.id;
-  let instaUrl = match[2] || match[1];
+  let instaUrl = match[1] || match[2] || match[3];
 
   instaUrl = `https://www.${instaUrl}`;
   console.log(instaUrl);
 
   try {
-    // const reply = await instagram_download.downloadMedia(
-    //   instaUrl,
-    //   __dirname + "/photos"
-    // );
-    // return console.log(reply);
+    await Instagram.login();
 
-    const data = await Instagram(instaUrl);
-    // console.log(data);
-    const userId =
-      data.entry_data.StoriesPage && data.entry_data.StoriesPage[0].user.id;
+    // return console.log(match);
 
-    let results = [];
+    const testForCode = instaUrl.match(/[p|tv]\/([a-z0-9_]+)/i);
+    let shortcode,
+      results = [],
+      files = [];
 
-    if (userId) {
-      const stories = await getStories({
-        id: userId,
-        userid: 1284161654,
-        sessionid: "1509886866%3AcYWwo6HEDPifg4%3A12",
-      });
-
-      // const mediaCodes = stories.items.map(item => item.code);
-      // console.log(
-      //   stories.items
-      //     .filter(s => s.video_versions)
-      //     .map(v => v.video_versions[0].url)
-      // );
-
-      stories.items.forEach(s => {
-        if (s.video_versions) {
-          results.push({
-            url: s.video_versions[0].url,
-            type: "video",
-          });
-        } else if (s.image_versions2) {
-          const storyPhoto = s.image_versions2.candidates[0];
-          // console.log(storyPhoto.url);
-          results.push({
-            url: storyPhoto.url,
-            type: "photo",
-          });
-        }
-      });
-
-      // const media = await getMediaByCode({
-      //   code: mediaCodes[0],
-      //   userid: 1284161654,
-      //   sessionid: "1509886866%3AcYWwo6HEDPifg4%3A12",
-      // });
-
-      // console.log(media);
+    if (testForCode) {
+      shortcode = testForCode[1];
+      // return console.log("hey yo");
+      // console.log(shortcode);
     } else {
-      const { shortcode_media } = data.entry_data.PostPage[0].graphql;
+      const usernameMatches = /stories\/([a-z0-9_]+)\/\d+/i;
 
-      results = shortcode_media.edge_sidecar_to_children
-        ? shortcode_media.edge_sidecar_to_children.edges.map(edge => {
-            let type = edge.node.__typename.replace("Graph", "").toLowerCase();
+      if (usernameMatches.test(instaUrl)) {
+        // return console.log("Yahoo!");
 
-            if (type === "image") {
-              type = "photo";
-            }
+        const [, username] = instaUrl.match(usernameMatches);
+        // return console.log(username);
+        const user = await Instagram.getUserByUsername({ username });
+        const userId = user.id;
+        // return console.log(userId);
+        const stories = await getStories({
+          id: parseInt(userId),
+          userid: 1509886866,
+          sessionid: "1509886866%3AJ6vevyBtF5FsCI%3A27",
+        });
 
-            return {
-              url: edge.node.video_url || edge.node.display_url,
-              type,
-            };
-          })
-        : [
-            {
-              url:
-                shortcode_media.video_url ||
-                shortcode_media.display_resources.pop().src,
-              type: shortcode_media.__typename.endsWith("Image")
-                ? "photo"
-                : shortcode_media.__typename.replace("Graph", "").toLowerCase(),
-            },
-          ];
+        // console.log(stories);
+
+        stories.items.forEach(s => {
+          if (s.video_versions) {
+            results.push({
+              url: s.video_versions[0].url,
+              type: "video",
+            });
+          } else if (s.image_versions2) {
+            const storyPhoto = s.image_versions2.candidates[0];
+            // console.log(storyPhoto.url);
+            results.push({
+              url: storyPhoto.url,
+              type: "photo",
+            });
+          }
+        });
+
+        const videoResults = results.filter(r => r.type === "video");
+
+        // sendResponse(await downloadVideoFiles(results));
+
+        files = await Promise.all(videoResults.map(r => downloadVideoFiles(r)));
+
+        sendResponse(files);
+      }
     }
+
+    async function downloadVideoFiles(result) {
+      const pathToSave = whereShouldSave();
+      const [, filename] = result.url.match(/(\d+_\d+_\d+_n.mp4)/i);
+      // return console.log(filename);
+
+      const downloader = new Downloader({
+        url: result.url,
+        directory: pathToSave,
+        cloneFiles: false,
+        maxAttempts: 3,
+        timeout: 60000,
+        onResponse: response => {
+          const bytes = +response.headers["content-length"];
+
+          // Если размер файла больше 50mb
+          if (bytes > 52428800) {
+            setTimeout(() => {
+              downloader.cancel();
+            }, 0);
+          }
+
+          return true;
+        },
+      });
+
+      try {
+        await downloader.download();
+        return fs.createReadStream(path.resolve(pathToSave, filename));
+        // return await readDirectory(pathToSave);
+      } catch (err) {
+        // console.log(err);
+
+        if (err.code === `ERR_REQUEST_CANCELLED`) {
+          // console.log(result.url);
+          const { headers } = await needle("head", result.url);
+
+          const size = Math.round(+headers["content-length"] / 1048576);
+
+          // console.log(size);
+
+          bot.sendMessage(
+            chatId,
+            `Размер вашего видеофайла: *${size}* Мегабайт\n\nПо техническим причинам скачивать видео больше 50МБ на данный момент не представляется возможным`,
+            { parse_mode: "Markdown" }
+          );
+
+          return size;
+        } else {
+          console.error("Download failed", err);
+        }
+      }
+    }
+
+    // return console.log(shortcode);
+
+    const shortcode_media = await Instagram.getMediaByShortcode({ shortcode });
+
+    // return console.log(shortcode_media);
+    // console.log(data);
 
     // return console.log(results);
     // return;
 
-    const [, mediaID] = instaUrl.match(/\/p\/([\d\D]+)/);
+    results = shortcode_media.edge_sidecar_to_children
+      ? shortcode_media.edge_sidecar_to_children.edges.map(edge => {
+          let type = edge.node.__typename.replace("Graph", "").toLowerCase();
 
-    console.log(mediaID);
+          if (type === "image") {
+            type = "photo";
+          }
 
-    const pathToSave = path.join(
-      __dirname,
-      "temp_videos",
-      `${userId || mediaID}`
-    );
+          return {
+            url: edge.node.video_url || edge.node.display_url,
+            type,
+          };
+        })
+      : [
+          {
+            url:
+              shortcode_media.video_url ||
+              shortcode_media.display_resources.pop().src,
+            type: shortcode_media.__typename.endsWith("Image")
+              ? "photo"
+              : shortcode_media.__typename.replace("Graph", "").toLowerCase(),
+          },
+        ];
+
+    // console.log(results);
 
     const videoResults = results.filter(res => res.type === "video");
 
-    let files;
+    // files = await downloadVideoFiles(videoResults);
 
-    results.forEach(async r => {
-      if (r.type === "video") {
-        const downloader = new Downloader({
-          url: r.url,
-          directory: pathToSave,
-          cloneFiles: false,
-          maxAttempts: 3,
-        });
+    files = await Promise.all(videoResults.map(r => downloadVideoFiles(r)));
+    // return console.log(files);
 
-        try {
-          await downloader.download();
-        } catch (err) {
-          console.error("Download failed", err);
-        }
-      }
-    });
-
-    if (videoResults.length) {
-      files = await readDirectory(pathToSave);
+    if (files.some(f => !f || Number.isInteger(f))) {
+      return;
     }
+
+    // console.log(mediaID);
+
+    // if (videoResults.length) {
+    //   files = await readDirectory(pathToSave);
+    // }
 
     // return console.log(path.resolve(pathToSave, files[0]));
 
-    const media = results.map((r, index) => {
-      if (r.type === "video") {
-        return { type: r.type, media: path.resolve(pathToSave, files[index]) };
-      } else {
-        // console.log(r);
-        return { type: r.type, media: r.url };
+    // console.log(results);
+
+    sendResponse(files);
+
+    function sendResponse(files) {
+      // return console.log(whereShouldSave());
+
+      const media = results.map((r, index) => {
+        if (r.type === "video" && files) {
+          return {
+            type: r.type,
+            media: files[index],
+          };
+        } else {
+          // console.log(r);
+          return { type: r.type, media: r.url };
+        }
+      });
+
+      // return console.log(media);
+
+      bot.sendMediaGroup(chatId, media);
+    }
+
+    function whereShouldSave() {
+      // const mediaMatches = instaUrl.match(/\/p\/([\d\D]+)/);
+      const storyMatches = instaUrl.match(/stories\/([a-z0-9_]+\/\d+)/i);
+      let pathToSave;
+
+      if (testForCode) {
+        pathToSave = path.join(__dirname, "temp_videos", `${testForCode[1]}`);
+      } else if (storyMatches) {
+        // return console.log(storyMatches);
+
+        pathToSave = path.join(__dirname, "temp_videos", `${storyMatches[1]}`);
       }
-    });
 
-    // return console.log(media);
-
-    bot.sendMediaGroup(chatId, media);
+      return pathToSave;
+    }
 
     // results.forEach(async r => {
     //   try {
@@ -390,8 +473,9 @@ const instaCallback = async (msg, match) => {
     // const { body, statusMessage } = await needle("get", instaUrl);
     // console.log(body);
   } catch (err) {
-    console.error(err);
-    bot.sendMessage(chatId, `Не удалось скачать фотогорафию по ссылке`);
+    if (!err.statusCode && err.statusCode !== 404) {
+      console.error(err);
+    }
   }
 };
 

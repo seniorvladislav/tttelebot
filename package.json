@@ -22,7 +22,8 @@
     "nodejs-file-downloader": "^4.5.3",
     "puppeteer": "^9.1.1",
     "redis": "^3.1.2",
-    "request": "^2.88.2"
+    "request": "^2.88.2",
+    "tough-cookie-filestore2": "^1.0.0"
   },
   "devDependencies": {
     "dotenv": "^9.0.2",
